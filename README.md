@@ -23,3 +23,11 @@ Here I want to share some problems I met:
 
 1. In OpenCV the color channel is **BGR** not RGB
 2. The frame get by glReadPixels is upside down, and the result is in bytes type.
+
+
+
+
+
+V2:
+
+​	Add motion blur, need to speed up ...

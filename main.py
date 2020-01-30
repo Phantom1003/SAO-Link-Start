@@ -2,6 +2,7 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.raw.GLU import gluPerspective, gluLookAt
 import cv2, numpy, random, time
+import numpy.matlib
 
 # python 3.6
 # sudo apt-get install freeglut3
@@ -54,12 +55,12 @@ def drawTunnel(depth, num, seed):
         elif i % 7 == 4:
             glColor3f(1.0, 0.0, 0.0) # Red
         elif i % 7 == 5:
-            glColor3f(0.0, 0.0, 0.0) # Black
+            glColor3f(0.6, 0.6, 0.6)  # Grey
         else:
-            glColor3f(0.5, 0.5, 0.5) # Grey
+            glColor3f(0.2, 0.2, 0.1)  # Black
         glPushMatrix()
         glRotatef(random.randint(0,359), 0, 0, 1)
-        glTranslatef(0.75 + 3*random.random(), 0, depth - 2 + 4*random.random())
+        glTranslatef(0.75 + 3*random.random(), 0, depth - 3.5 + 4*random.random())
         glutSolidCylinder(0.07, 2+2*random.random(), 360, 10)
         glPopMatrix()
 
@@ -79,11 +80,42 @@ def draw():
 
     time.sleep(0.05)
 
+
+def motion_blur(image, row, col, channel):
+    img_out = image.copy()
+    global center_x, center_y, R, Num
+
+    for i in range(row):
+        for j in range(col):
+            R_arr = R[i, j] - arr
+            R_arr[R_arr < 0] = 0
+
+            new_x = R_arr * numpy.cos(angle[i, j]) + center_x
+            new_y = R_arr * numpy.sin(angle[i, j]) + center_y
+
+            int_x = new_x.astype(int)
+            int_y = new_y.astype(int)
+
+            int_x[int_x > col - 1] = col - 1
+            int_x[int_x < 0] = 0
+            int_y[int_y < 0] = 0
+            int_y[int_y > row - 1] = row - 1
+
+            img_out[i, j, 0] = image[int_y, int_x, 0].sum() / Num
+            img_out[i, j, 1] = image[int_y, int_x, 1].sum() / Num
+            img_out[i, j, 2] = image[int_y, int_x, 2].sum() / Num
+    return img_out
+
+
 def screenCapture(width, height):
     global videoWriter
     data = glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE)
     image = numpy.array(bytearray(data)).reshape(height, width, 3)
     image = numpy.flipud(image)
+
+    row, col, channel = image.shape
+    image = motion_blur(image, row, col, channel)
+
     # cv2.imshow('Monitor', image)
     # cv2.waitKey(10)
     videoWriter.write(image)
@@ -95,6 +127,7 @@ def redraw():
     elif step < -20:
         step = delta
         recode = False
+        sys.exit()
     elif step < 10:
         step = step - 1.8
     elif step < 15:
@@ -106,6 +139,7 @@ def redraw():
     else:
         step = step - 1
     draw()
+    print(step)
     if recode:
         screenCapture(width, height)
 
@@ -129,12 +163,30 @@ glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH )
 glutInitWindowSize(width, height)
 glutInitWindowPosition(0, 0)
 glutCreateWindow("Link Start!")
+glutHideWindow()
 
 glutDisplayFunc(draw)
 glutReshapeFunc(reshape)
 glutIdleFunc(redraw)
 glutKeyboardFunc(keyBoard)
 lid = genList()
+
+xx = numpy.arange(width)
+yy = numpy.arange(height)
+
+x_mask = numpy.matlib.repmat(xx, height, 1)
+y_mask = numpy.matlib.repmat(yy, width, 1)
+y_mask = numpy.transpose(y_mask)
+
+center_y = (height - 1) / 2.0
+center_x = (width - 1) / 2.0
+
+R = numpy.sqrt((x_mask - center_x) ** 2 + (y_mask - center_y) ** 2)
+R[R < 0] = 0
+angle = numpy.arctan2(y_mask - center_y, x_mask - center_x)
+
+Num = 5
+arr = numpy.arange(Num)
 
 glutMainLoop()
 
